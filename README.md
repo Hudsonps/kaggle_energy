@@ -1,2 +1,2 @@
 # kaggle_energy
-Work on Kaggle's Energy Prediction competition
+Code for Kaggle's Energy Prediction competition
