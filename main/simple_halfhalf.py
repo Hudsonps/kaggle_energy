@@ -1,5 +1,8 @@
 '''
 Ported from https://www.kaggle.com/rohanrao/ashrae-half-and-half
+
+To Try:
+- Drop first 141 days site 0 electricity meter readings
 '''
 
 import gc
@@ -76,8 +79,8 @@ if __name__ == '__main__':
     ##############
     # Parameters #
     ##############
-    sample = True
-    submission_name = "submission_2019-11-30_simple_halfhalf.csv"
+    sample = False
+    submission_name = "submission_2019-11-30_simple_halfhalf"
 
     myfavouritenumber = 0
     seed = myfavouritenumber
@@ -146,6 +149,8 @@ if __name__ == '__main__':
         free_raw_data=False
     )
 
+    # Include both datasets in watchlists
+    # to get both training and validation loss
     watchlist_1 = [d_half_1, d_half_2]
     watchlist_2 = [d_half_2, d_half_1]
 
