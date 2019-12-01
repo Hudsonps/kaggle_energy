@@ -38,6 +38,7 @@ def prepare_data(X, building_data, weather_data, test=False):
 
     gc.collect()
 
+    # Generate date-based features
     holidays = [
         "2016-01-01", "2016-01-18", "2016-02-15", "2016-05-30", "2016-07-04",
         "2016-09-05", "2016-10-10", "2016-11-11", "2016-11-24", "2016-12-26",
@@ -56,10 +57,23 @@ def prepare_data(X, building_data, weather_data, test=False):
         isin(holidays)
     ).astype(int)
 
+    if not test:
+        print(
+            "Remove first 141 days from site 0, electricity meter readings...")
+        num_records = len(X)
+        first141d_site0_meter0_cond = \
+            (X.site_id == 0) & \
+            (X.meter == 0) & \
+            (X.timestamp.dt.dayofyear >= 0) & \
+            (X.timestamp.dt.dayofyear <= 141)
+
+        X = X.loc[~first141d_site0_meter0_cond, :]
+        print(f"Number of records dropped: {num_records - len(X)}")
+
+    # Drop features to exclude from training
     drop_features = [
         "timestamp", "sea_level_pressure", "wind_direction", "wind_speed"
     ]
-
     X.drop(drop_features, axis=1, inplace=True)
 
     if test:
@@ -73,6 +87,7 @@ def prepare_data(X, building_data, weather_data, test=False):
 
 
 if __name__ == '__main__':
+
     MAIN = pathlib.Path('/Users/palermopenano/personal/kaggle_energy')
     SUBMISSIONS_PATH = MAIN / 'submissions'
 
@@ -80,11 +95,10 @@ if __name__ == '__main__':
     # Parameters #
     ##############
     sample = False
-    submission_name = "submission_2019-11-30_simple_halfhalf"
+    submission_name = \
+        "submission_2019-11-30_simple_halfhalf_drop141days_site0meter0"
 
-    myfavouritenumber = 0
-    seed = myfavouritenumber
-    random.seed(seed)
+    random.seed(0)
 
     #############
     # Load Data #
@@ -228,10 +242,11 @@ if __name__ == '__main__':
     del model_half_2
     gc.collect()
 
-    print("Saving predictions as csv...")
-    submission = pd.DataFrame(
-        {"row_id": row_ids, "meter_reading": np.clip(pred, 0, a_max=None)}
-    )
-    submission.to_csv(
-        SUBMISSIONS_PATH / (submission_name + '.csv'), index=False
-    )
+    if not sample:
+        print("Saving predictions as csv...")
+        submission = pd.DataFrame(
+            {"row_id": row_ids, "meter_reading": np.clip(pred, 0, a_max=None)}
+        )
+        submission.to_csv(
+            SUBMISSIONS_PATH / (submission_name + '.csv'), index=False
+        )
