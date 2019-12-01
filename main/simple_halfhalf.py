@@ -2,7 +2,8 @@
 Ported from https://www.kaggle.com/rohanrao/ashrae-half-and-half
 
 To Try:
-- Drop first 141 days site 0 electricity meter readings
+- Drop all 0 electricity readings
+- X Drop first 141 days site 0 electricity meter readings
 '''
 
 import gc
@@ -58,16 +59,21 @@ def prepare_data(X, building_data, weather_data, test=False):
     ).astype(int)
 
     if not test:
-        print(
-            "Remove first 141 days from site 0, electricity meter readings...")
         num_records = len(X)
-        first141d_site0_meter0_cond = \
-            (X.site_id == 0) & \
-            (X.meter == 0) & \
-            (X.timestamp.dt.dayofyear >= 0) & \
-            (X.timestamp.dt.dayofyear <= 141)
 
-        X = X.loc[~first141d_site0_meter0_cond, :]
+        # print(
+        #     "Drop first 141 days from site 0, electricity meter readings...")
+        # first141d_site0_meter0_cond = \
+        #     (X.site_id == 0) & \
+        #     (X.meter == 0) & \
+        #     (X.timestamp.dt.dayofyear >= 0) & \
+        #     (X.timestamp.dt.dayofyear <= 141)
+        # X = X.loc[~first141d_site0_meter0_cond, :]
+
+        print("Drop all zero meter readings for electricity meter...")
+        all_zero_meter_zero_cond = \
+            (X.meter == 0) & (X.meter_reading == 0.)
+        X = X.loc[~all_zero_meter_zero_cond, :]
         print(f"Number of records dropped: {num_records - len(X)}")
 
     # Drop features to exclude from training
@@ -96,7 +102,7 @@ if __name__ == '__main__':
     ##############
     sample = False
     submission_name = \
-        "submission_2019-11-30_simple_halfhalf_drop141days_site0meter0"
+        "submission_2019-12-01_simple_halfhalf_dropallzero_electricty"
 
     random.seed(0)
 
