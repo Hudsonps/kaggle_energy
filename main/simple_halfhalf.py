@@ -102,7 +102,7 @@ if __name__ == '__main__':
     ##############
     sample = False
     submission_name = \
-        "submission_2019-12-01_simple_halfhalf_dropallzero_electricty"
+        "submission_2019-12-02_simple_halfhalf_meterlevelmodels"
 
     random.seed(0)
 
@@ -140,40 +140,6 @@ if __name__ == '__main__':
     del df_train, weather_train
     gc.collect()
 
-    #####################
-    # Two-Fold LightGBM #
-    #####################
-    print("\n==================\n")
-    X_half_1 = X_train[:int(X_train.shape[0] / 2)]
-    X_half_2 = X_train[int(X_train.shape[0] / 2):]
-
-    y_half_1 = y_train[:int(X_train.shape[0] / 2)]
-    y_half_2 = y_train[int(X_train.shape[0] / 2):]
-
-    categorical_features = [
-        "building_id", "site_id",
-        "meter", "primary_use",
-        "hour", "weekday"
-    ]
-
-    d_half_1 = lgb.Dataset(
-        X_half_1,
-        label=y_half_1,
-        categorical_feature=categorical_features,
-        free_raw_data=False
-    )
-    d_half_2 = lgb.Dataset(
-        X_half_2,
-        label=y_half_2,
-        categorical_feature=categorical_features,
-        free_raw_data=False
-    )
-
-    # Include both datasets in watchlists
-    # to get both training and validation loss
-    watchlist_1 = [d_half_1, d_half_2]
-    watchlist_2 = [d_half_2, d_half_1]
-
     params = {
         "objective": "regression",
         "boosting": "gbdt",
@@ -184,25 +150,69 @@ if __name__ == '__main__':
         "metric": "rmse"
     }
 
-    print("Building model with first half and validating on second half:")
-    model_half_1 = lgb.train(
-        params,
-        train_set=d_half_1,
-        num_boost_round=1000,
-        valid_sets=watchlist_1,
-        verbose_eval=200,
-        early_stopping_rounds=200
-    )
+    categorical_features = [
+        "building_id", "site_id", "primary_use",
+        "hour", "weekday"
+    ]
 
-    print("Building model with second half and validating on first half:")
-    model_half_2 = lgb.train(
-        params,
-        train_set=d_half_2,
-        num_boost_round=1000,
-        valid_sets=watchlist_2,
-        verbose_eval=200,
-        early_stopping_rounds=200
-    )
+    meter_models = {}
+
+    for m in range(4):
+
+        print(f"\n>>>>>> Training on meter {m} <<<<<<")
+
+        X_train_m = X_train[X_train.meter == m]
+        y_train_m = y_train[X_train_m.index]
+
+        #####################
+        # Two-Fold LightGBM #
+        #####################
+        print("\n==================\n")
+        X_half_1 = X_train_m[:int(X_train_m.shape[0] / 2)]
+        X_half_2 = X_train_m[int(X_train_m.shape[0] / 2):]
+
+        y_half_1 = y_train_m[:int(X_train_m.shape[0] / 2)]
+        y_half_2 = y_train_m[int(X_train_m.shape[0] / 2):]
+
+        d_half_1 = lgb.Dataset(
+            X_half_1,
+            label=y_half_1,
+            categorical_feature=categorical_features,
+            free_raw_data=False
+        )
+        d_half_2 = lgb.Dataset(
+            X_half_2,
+            label=y_half_2,
+            categorical_feature=categorical_features,
+            free_raw_data=False
+        )
+
+        # Include both datasets in watchlists
+        # to get both training and validation loss
+        watchlist_1 = [d_half_1, d_half_2]
+        watchlist_2 = [d_half_2, d_half_1]
+
+        print("Building model with first half and validating on second half:")
+        model_half_1 = lgb.train(
+            params,
+            train_set=d_half_1,
+            num_boost_round=1000,
+            valid_sets=watchlist_1,
+            verbose_eval=200,
+            early_stopping_rounds=200
+        )
+
+        print("Building model with second half and validating on first half:")
+        model_half_2 = lgb.train(
+            params,
+            train_set=d_half_2,
+            num_boost_round=1000,
+            valid_sets=watchlist_2,
+            verbose_eval=200,
+            early_stopping_rounds=200
+        )
+
+        meter_models[m] = (model_half_1, model_half_2)
 
     #####################
     # Prepare Test Data #
@@ -232,26 +242,45 @@ if __name__ == '__main__':
         "Generating predicitons on test set...",
         sep='\n'
     )
-    raw_pred_1 = model_half_1.predict(
-        X_test,
-        num_iteration=model_half_1.best_iteration
-    )
-    pred = np.expm1(raw_pred_1) / 2
-    del model_half_1
-    gc.collect()
 
-    raw_pred_2 = model_half_2.predict(
-        X_test,
-        num_iteration=model_half_2.best_iteration
-    )
-    pred += np.expm1(raw_pred_2) / 2
-    del model_half_2
-    gc.collect()
+    for m in range(4):
+
+        print(f">>>>> Predicting meter {m} <<<<<")
+        X_test_m = X_test[X_test.meter == m]
+        model_half_1, model_half_2 = meter_models[m]
+
+        print("pred half 1")
+        raw_pred_1 = model_half_1.predict(
+            X_test_m,
+            num_iteration=model_half_1.best_iteration
+        )
+        pred = np.expm1(raw_pred_1) / 2
+        del model_half_1
+        gc.collect()
+
+        print("pred half 2")
+        raw_pred_2 = model_half_2.predict(
+            X_test_m,
+            num_iteration=model_half_2.best_iteration
+        )
+        pred += np.expm1(raw_pred_2) / 2
+        del model_half_2
+        gc.collect()
+
+        X_test.loc[X_test_m.index, "meter_reading"] = pred
+
+        print(
+            f"Meter: {m}",
+            X_test[X_test.meter.isna().any(axis=1)],
+            sep='\n'
+        )
 
     if not sample:
         print("Saving predictions as csv...")
         submission = pd.DataFrame(
-            {"row_id": row_ids, "meter_reading": np.clip(pred, 0, a_max=None)}
+            {
+                "row_id": row_ids,
+                "meter_reading": np.clip(X_test.meter_reading, 0, a_max=None)}
         )
         submission.to_csv(
             SUBMISSIONS_PATH / (submission_name + '.csv'), index=False
