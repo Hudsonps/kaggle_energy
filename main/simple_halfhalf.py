@@ -52,6 +52,7 @@ def prepare_data(X, building_data, weather_data, test=False):
 
     X["hour"] = X.timestamp.dt.hour
     X["weekday"] = X.timestamp.dt.weekday
+    X["month"] = X.timestamp.dt.month
     X["is_holiday"] = (
         X.timestamp.dt.date.
         astype("str").
@@ -165,7 +166,7 @@ if __name__ == '__main__':
     categorical_features = [
         "building_id", "site_id",
         "meter", "primary_use",
-        "hour", "weekday"
+        "hour", "weekday", "month"
     ]
 
     d_half_1 = lgb.Dataset(
