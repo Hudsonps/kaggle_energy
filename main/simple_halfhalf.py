@@ -2,7 +2,7 @@
 Ported from https://www.kaggle.com/rohanrao/ashrae-half-and-half
 
 To Try:
-- Drop all 0 electricity readings
+- X Drop all 0 electricity readings
 - X Drop first 141 days site 0 electricity meter readings
 '''
 
@@ -20,6 +20,80 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import LabelEncoder
 
 from utils import *
+
+
+def make_is_bad_zero(
+    Xy_subset, min_interval=48, summer_start=3000, summer_end=7500
+):
+    """Helper routine for 'find_bad_zeros'.
+
+    This operates upon a single dataframe produced by 'groupby'. We expect an
+    additional column 'meter_id' which is a duplicate of 'meter' because
+    groupby eliminates the original one."""
+    meter = Xy_subset.meter_id.iloc[0]
+    is_zero = Xy_subset.meter_reading == 0
+    if meter == 0:
+        # Electrical meters should never be zero. Keep all zero-readings in
+        # this table so that they will all be dropped in the train set.
+        return is_zero
+
+    transitions = (is_zero != is_zero.shift(1))
+    all_sequence_ids = transitions.cumsum()
+    ids = all_sequence_ids[is_zero].rename("ids")
+    if meter in [2, 3]:
+        # It's normal for steam and hotwater to be turned off during the summer
+        keep = set(ids[(Xy_subset.timestamp < summer_start) |
+                       (Xy_subset.timestamp > summer_end)].unique())
+        is_bad = ids.isin(keep) & (ids.map(ids.value_counts()) >= min_interval)
+    elif meter == 1:
+        time_ids = (
+            ids.to_frame().
+            join(Xy_subset.timestamp).
+            set_index("timestamp").ids
+        )
+        is_bad = ids.map(ids.value_counts()) >= min_interval
+
+        # Cold water may be turned off during the winter
+        jan_id = time_ids.get(0, False)
+        dec_id = time_ids.get(8283, False)
+        if (jan_id and dec_id and jan_id == time_ids.get(500, False) and
+                dec_id == time_ids.get(8783, False)):
+            is_bad = is_bad & (~(ids.isin(set([jan_id, dec_id]))))
+    else:
+        raise Exception(f"Unexpected meter type: {meter}")
+
+    result = is_zero.copy()
+    result.update(is_bad)
+    return result
+
+
+def find_bad_zeros(X, y):
+    """Returns an Index object containing only the rows
+    which should be deleted.
+    """
+    Xy = X.assign(meter_reading=y, meter_id=X.meter)
+    is_bad_zero = Xy.groupby(["building_id", "meter"]).apply(make_is_bad_zero)
+    return is_bad_zero[is_bad_zero].index.droplevel([0, 1])
+
+
+def find_bad_sitezero(X):
+    """Returns indices of bad rows from the early days of Site 0 (UCF)."""
+    return X[(X.timestamp < 3378) & (X.site_id == 0) & (X.meter == 0)].index
+
+
+def find_bad_building1099(X, y):
+    """Returns indices of bad rows (with absurdly high readings)
+    from building 1099.
+    """
+    return X[(X.building_id == 1099) & (X.meter == 2) & (y > 3e4)].index
+
+
+def find_bad_rows(X, y):
+    return (
+        find_bad_zeros(X, y).
+        union(find_bad_sitezero(X)).
+        union(find_bad_building1099(X, y))
+    )
 
 
 def prepare_data(X, building_data, weather_data, test=False):
@@ -58,29 +132,16 @@ def prepare_data(X, building_data, weather_data, test=False):
         isin(holidays)
     ).astype(int)
 
-    if not test:
-        num_records = len(X)
-
-        # print(
-        #     "Drop first 141 days from site 0, electricity meter readings...")
-        # first141d_site0_meter0_cond = \
-        #     (X.site_id == 0) & \
-        #     (X.meter == 0) & \
-        #     (X.timestamp.dt.dayofyear >= 0) & \
-        #     (X.timestamp.dt.dayofyear <= 141)
-        # X = X.loc[~first141d_site0_meter0_cond, :]
-
-        print("Drop all zero meter readings for electricity meter...")
-        all_zero_meter_zero_cond = \
-            (X.meter == 0) & (X.meter_reading == 0.)
-        X = X.loc[~all_zero_meter_zero_cond, :]
-        print(f"Number of records dropped: {num_records - len(X)}")
-
     # Drop features to exclude from training
     drop_features = [
-        "timestamp", "sea_level_pressure", "wind_direction", "wind_speed"
+        "sea_level_pressure", "wind_direction", "wind_speed"
     ]
     X.drop(drop_features, axis=1, inplace=True)
+
+    # Convert timestamp to hours
+    X.timestamp = (
+        X.timestamp - pd.to_datetime("2016-01-01")
+    ).dt.total_seconds() // 3600
 
     if test:
         row_ids = X.row_id
@@ -94,17 +155,21 @@ def prepare_data(X, building_data, weather_data, test=False):
 
 if __name__ == '__main__':
 
-    MAIN = pathlib.Path('/Users/palermopenano/personal/kaggle_energy')
-    SUBMISSIONS_PATH = MAIN / 'submissions'
-
     ##############
     # Parameters #
     ##############
     sample = False
     submission_name = \
-        "submission_2019-12-01_simple_halfhalf_dropallzero_electricty"
+        "submission_2019-12-01_simple_halfhalf_drop_bad_rows"
 
     random.seed(0)
+
+    #############
+    # Set Paths #
+    #############
+
+    MAIN = pathlib.Path('/Users/palermopenano/personal/kaggle_energy')
+    SUBMISSIONS_PATH = MAIN / 'submissions'
 
     #############
     # Load Data #
@@ -129,9 +194,21 @@ if __name__ == '__main__':
     # Reduce Memory Usage #
     #######################
     print("Reducing memory usage...")
-    df_train = reduce_mem_usage(df_train, use_float16=True)
-    building = reduce_mem_usage(building, use_float16=True)
-    weather_train = reduce_mem_usage(weather_train, use_float16=True)
+    df_train = reduce_mem_usage(
+        df_train,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    building = reduce_mem_usage(
+        building,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    weather_train = reduce_mem_usage(
+        weather_train,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
 
     #########################
     # Prepare Training Data #
@@ -139,6 +216,18 @@ if __name__ == '__main__':
     X_train, y_train = prepare_data(df_train, building, weather_train)
     del df_train, weather_train
     gc.collect()
+
+    #############################
+    # Find bad rows in training #
+    #############################
+    print(f"Shape before dropping bad rows: {X_train.shape}")
+    bad_rows = find_bad_rows(X_train, y_train)
+    X_train = X_train.drop(index=bad_rows)
+    y_train = y_train.reindex_like(X_train)
+    print(
+        "Shape and number of records dropped:"
+        f" {X_train.shape}, {len(bad_rows)}"
+    )
 
     #####################
     # Two-Fold LightGBM #
@@ -215,8 +304,16 @@ if __name__ == '__main__':
     df_test = pd.read_csv(MAIN / 'data' / 'test.csv')
     weather_test = pd.read_csv(MAIN / 'data' / 'weather_test.csv')
 
-    df_test = reduce_mem_usage(df_test)
-    weather_test = reduce_mem_usage(weather_test)
+    df_test = reduce_mem_usage(
+        df_test,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    weather_test = reduce_mem_usage(
+        weather_test,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
 
     if sample:
         df_test = df_test[df_test['building_id'].isin(randbuilding)]
@@ -255,4 +352,10 @@ if __name__ == '__main__':
         )
         submission.to_csv(
             SUBMISSIONS_PATH / (submission_name + '.csv'), index=False
+        )
+
+        print(
+            submission.meter_reading.describe().apply(
+                lambda x: format(x, ',.2f')
+            )
         )
