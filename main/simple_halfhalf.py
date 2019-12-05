@@ -2,6 +2,7 @@
 Ported from https://www.kaggle.com/rohanrao/ashrae-half-and-half
 
 To Try:
+- Moving average meter reading
 - Drop all 0 electricity readings
 - X Drop first 141 days site 0 electricity meter readings
 '''
@@ -52,7 +53,6 @@ def prepare_data(X, building_data, weather_data, test=False):
 
     X["hour"] = X.timestamp.dt.hour
     X["weekday"] = X.timestamp.dt.weekday
-    X["month"] = X.timestamp.dt.month
     X["is_holiday"] = (
         X.timestamp.dt.date.
         astype("str").
@@ -101,9 +101,9 @@ if __name__ == '__main__':
     ##############
     # Parameters #
     ##############
-    sample = True
+    sample = False
     submission_name = \
-        "submission_2019-12-01_simple_halfhalf_dropallzero_electricty"
+        "submission_2019-12-04_simple_halfhalf_add_month"
 
     random.seed(0)
 
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     categorical_features = [
         "building_id", "site_id",
         "meter", "primary_use",
-        "hour", "weekday", "month"
+        "hour", "weekday"
     ]
 
     d_half_1 = lgb.Dataset(
