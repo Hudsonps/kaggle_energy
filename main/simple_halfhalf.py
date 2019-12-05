@@ -100,7 +100,7 @@ if __name__ == '__main__':
     ##############
     # Parameters #
     ##############
-    sample = False
+    sample = True
     submission_name = \
         "submission_2019-12-01_simple_halfhalf_dropallzero_electricty"
 
@@ -129,9 +129,21 @@ if __name__ == '__main__':
     # Reduce Memory Usage #
     #######################
     print("Reducing memory usage...")
-    df_train = reduce_mem_usage(df_train, use_float16=True)
-    building = reduce_mem_usage(building, use_float16=True)
-    weather_train = reduce_mem_usage(weather_train, use_float16=True)
+    df_train = reduce_mem_usage(
+        df_train,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    building = reduce_mem_usage(
+        building,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    weather_train = reduce_mem_usage(
+        weather_train,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
 
     #########################
     # Prepare Training Data #
@@ -215,8 +227,16 @@ if __name__ == '__main__':
     df_test = pd.read_csv(MAIN / 'data' / 'test.csv')
     weather_test = pd.read_csv(MAIN / 'data' / 'weather_test.csv')
 
-    df_test = reduce_mem_usage(df_test)
-    weather_test = reduce_mem_usage(weather_test)
+    df_test = reduce_mem_usage(
+        df_test,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
+    weather_test = reduce_mem_usage(
+        weather_test,
+        use_float16=True,
+        cols_exclude=['timestamp']
+    )
 
     if sample:
         df_test = df_test[df_test['building_id'].isin(randbuilding)]
