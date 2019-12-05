@@ -256,3 +256,9 @@ if __name__ == '__main__':
         submission.to_csv(
             SUBMISSIONS_PATH / (submission_name + '.csv'), index=False
         )
+
+        print(
+            submission.meter_reading.describe().apply(
+                lambda x: format(x, ',.2f')
+            )
+        )
