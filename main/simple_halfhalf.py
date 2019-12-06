@@ -79,17 +79,46 @@ def prepare_data(X, building_data, weather_data, test=False):
 
     # Drop features to exclude from training
     drop_features = [
-        "timestamp", "sea_level_pressure", "wind_direction", "wind_speed"
+        "sea_level_pressure", "wind_direction", "wind_speed"
     ]
     X.drop(drop_features, axis=1, inplace=True)
 
     if test:
         row_ids = X.row_id
-        X.drop("row_id", axis=1, inplace=True)
+        X.drop(["row_id", "timestamp"], axis=1, inplace=True)
         return X, row_ids
     else:
+
+        # Smooth out time series moving average
+        period = 3
+        tmp = rolling_stat(
+            X, 'timestamp', ['building_id', 'meter'],
+            ['meter_reading'], period, np.mean
+        )
+        X = X.drop('meter_reading', 1)
+        X = X.merge(
+            tmp,
+            how='inner',
+            on=['building_id', 'meter', 'timestamp']
+        )
+        # Shift back by an hour because moving
+        # average tends to shift the series forward
+        X['meter_reading'] = (
+            X.groupby(['building_id', 'meter'])['meter_reading'].
+            shift(-1)
+        )
+        # Replace missing with mean for building / site
+        # TODO !!! Find better approach to replace missing meter readings
+        # due to rolling average
+        X['meter_reading'] = (
+            X.
+            groupby(['building_id', 'meter'])['meter_reading'].
+            transform(lambda x: x.fillna(x.mean()))
+        )
+        # print(X.meter_reading.isna().sum())
+        # print(X.meter_reading.describe())
         y = np.log1p(X.meter_reading)
-        X.drop("meter_reading", axis=1, inplace=True)
+        X.drop(["meter_reading", "timestamp"], axis=1, inplace=True)
         return X, y
 
 
@@ -103,7 +132,7 @@ if __name__ == '__main__':
     ##############
     sample = False
     submission_name = \
-        "submission_2019-12-04_simple_halfhalf_add_month"
+        "submission_2019-12-05_simple_halfhalf_moving_avg_meter"
 
     random.seed(0)
 
@@ -122,7 +151,7 @@ if __name__ == '__main__':
     if sample:
         print("Taking a random sample of buildings...")
         df_train, randbuilding = \
-            df_sample_random_buildings(df_train, 'building_id', n=5)
+            df_sample_random_buildings(df_train, 'building_id', n=15)
         print(randbuilding)
     print(df_train.shape)
 
@@ -150,6 +179,7 @@ if __name__ == '__main__':
     # Prepare Training Data #
     #########################
     X_train, y_train = prepare_data(df_train, building, weather_train)
+
     del df_train, weather_train
     gc.collect()
 
