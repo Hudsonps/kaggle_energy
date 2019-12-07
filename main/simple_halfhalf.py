@@ -106,7 +106,7 @@ parser.add_argument(
     '-sn', '--submission_name',
     type=pathlib.Path,
     required=True,
-    help='Path to config yaml file',
+    help='Name of submission',
 )
 
 if __name__ == '__main__':
