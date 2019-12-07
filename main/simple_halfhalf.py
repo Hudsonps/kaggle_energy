@@ -11,6 +11,7 @@ import gc
 import os
 import random
 import pathlib
+import argparse
 
 import lightgbm as lgb
 import numpy as np
@@ -93,18 +94,28 @@ def prepare_data(X, building_data, weather_data, test=False):
         return X, y
 
 
+parser = argparse.ArgumentParser(
+    description="Generate aggregate features")
+parser.add_argument(
+    '-s', '--sample',
+    action='store_true',
+    help='Run code on a select subset of ruts '
+         'from main dataset for prototyping'
+)
+parser.add_argument(
+    '-sn', '--submission_name',
+    type=pathlib.Path,
+    required=True,
+    help='Path to config yaml file',
+)
+
 if __name__ == '__main__':
 
     MAIN = pathlib.Path('/Users/palermopenano/personal/kaggle_energy')
     SUBMISSIONS_PATH = MAIN / 'submissions'
-
-    ##############
-    # Parameters #
-    ##############
-    sample = False
-    submission_name = \
-        "submission_2019-12-04_simple_halfhalf_add_month"
-
+    p = parser.parse_args()
+    sample = p.sample
+    submission_name = p.submission_name
     random.seed(0)
 
     #############
