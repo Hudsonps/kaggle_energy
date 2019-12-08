@@ -94,7 +94,7 @@ def prepare_data(X, building_data, weather_data, test=False):
 
 if __name__ == '__main__':
 
-    MAIN = pathlib.Path('/Users/palermopenano/personal/kaggle_energy')
+    MAIN = pathlib.Path('/Users/hudsonps/kaggle/ashrae-energy-prediction/kaggle_energy/')
     SUBMISSIONS_PATH = MAIN / 'submissions'
 
     ##############
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     ##############
     sample = False
     submission_name = \
-        "submission_2019-12-02_simple_halfhalf_meterlevelmodels"
+        "submission_2019-12-08_simple_halfhalf_sites"
 
     random.seed(0)
 
@@ -151,17 +151,17 @@ if __name__ == '__main__':
     }
 
     categorical_features = [
-        "building_id", "site_id", "primary_use",
+        "building_id", "meter", "primary_use",
         "hour", "weekday"
     ]
 
-    meter_models = {}
+    site_models = {}
 
-    for m in range(4):
+    for m in range(16):
 
-        print(f"\n>>>>>> Training on meter {m} <<<<<<")
+        print(f"\n>>>>>> Training on site {m} <<<<<<")
 
-        X_train_m = X_train[X_train.meter == m]
+        X_train_m = X_train[X_train.site_id == m]
         y_train_m = y_train[X_train_m.index]
 
         #####################
@@ -212,7 +212,7 @@ if __name__ == '__main__':
             early_stopping_rounds=200
         )
 
-        meter_models[m] = (model_half_1, model_half_2)
+        site_models[m] = (model_half_1, model_half_2)
 
     #####################
     # Prepare Test Data #
@@ -243,11 +243,11 @@ if __name__ == '__main__':
         sep='\n'
     )
 
-    for m in range(4):
+    for m in range(16):
 
-        print(f">>>>> Predicting meter {m} <<<<<")
-        X_test_m = X_test[X_test.meter == m]
-        model_half_1, model_half_2 = meter_models[m]
+        print(f">>>>> Predicting site {m} <<<<<")
+        X_test_m = X_test[X_test.site_id == m]
+        model_half_1, model_half_2 = site_models[m]
 
         print("pred half 1")
         raw_pred_1 = model_half_1.predict(
@@ -270,8 +270,8 @@ if __name__ == '__main__':
         X_test.loc[X_test_m.index, "meter_reading"] = pred
 
         print(
-            f"Meter: {m}",
-            X_test[X_test.meter.isna().any(axis=1)],
+            f"site {m}",
+            X_test[X_test.site_id.isna()],
             sep='\n'
         )
 
