@@ -1,7 +1,7 @@
 library(tidyverse)
 library(feather)
 setwd("/Users/palermopenano/personal/kaggle_energy")
-source("kaggle_energy/main/r_code/tsoutliers.R")
+source("kaggle_energy/main/tsoutliers/tsoutliers.R")
 
 # load csv
 df <- read_csv("data/train.csv")
