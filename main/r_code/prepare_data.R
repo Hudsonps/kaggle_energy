@@ -1,12 +1,13 @@
 library(tidyverse)
 library(feather)
 setwd("/Users/palermopenano/personal/kaggle_energy")
-source("r_code/tsoutliers.R")
+source("kaggle_energy/main/r_code/tsoutliers.R")
 
 # load csv
-df <- read_csv("data/meters.csv")
+df <- read_csv("data/train.csv")
 
 # !!! For testing
+# df <- read_csv("data/meters.csv")
 # df <- df %>% filter(building_id %in% c(880))
 
 save_scores <- function(mytibble)
@@ -31,6 +32,6 @@ a <-df %>%
       building_id = .x$building_id,
       meter = .x$meter,
       timestamp = .x$timestamp,
-      outliers = tsoutliers(.x$meter_reading, plot=FALSE, lower_thresh=0.1, upper_thresh=0.9)
+      outliers = tsoutliers(.x$meter_reading, plot=FALSE, lower_prob=0.05, upper_prob=0.95)
     ) %>% save_scores()
 }, keep=TRUE)
